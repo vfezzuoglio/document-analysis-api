@@ -190,7 +190,7 @@ export default function AskPanel({ docId, docs }) {
         <div className="mt-3">
           {processing ? (
             <div className="rounded-xl border px-3 py-2 text-sm opacity-80">
-              Processing… please wait a moment (this auto-updates on refresh/polling).
+              Processing… this usually takes a few seconds.
             </div>
           ) : null}
 

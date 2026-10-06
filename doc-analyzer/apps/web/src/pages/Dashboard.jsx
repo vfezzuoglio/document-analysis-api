@@ -32,7 +32,12 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
-    refreshDocs();
+    refreshDocs().catch((e) => {
+      if (/token|credential|401|unauthorized/i.test(e.message)) {
+        clearToken();
+        location.href = "/";
+      }
+    });
   }, []);
 
   useEffect(() => {
