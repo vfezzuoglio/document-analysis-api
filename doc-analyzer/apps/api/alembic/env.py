@@ -20,6 +20,8 @@ from app import models  # noqa: F401  (ensures models are registered)
 # Alembic Config object
 # -------------------------------------------------------------------
 config = context.config
+from app.core.config import settings
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Configure logging
 if config.config_file_name is not None:
