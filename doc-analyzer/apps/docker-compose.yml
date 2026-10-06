@@ -25,6 +25,8 @@ services:
       DATABASE_URL: postgresql+psycopg://app:app@db:5432/docanalyzer
       JWT_SECRET: change_me_in_prod
       CORS_ORIGINS: http://localhost:5173
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      CLAUDE_MODEL: claude-haiku-4-5-20251001
     ports:
       - "8000:8000"
     depends_on:

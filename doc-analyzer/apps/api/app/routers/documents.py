@@ -8,7 +8,7 @@ from typing import List
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from pypdf  import PdfReader
 from sqlalchemy.orm import Session
-
+from app.services.answer import generate_answer
 from app.core.database import SessionLocal, get_db
 from app.core.security_deps import get_current_user
 from app.models import Chunk, Document, User
@@ -198,7 +198,7 @@ def ask_document(
         db.query(Chunk)
         .filter(Chunk.document_id == doc.id, Chunk.embedding.isnot(None))
         .order_by(Chunk.embedding.cosine_distance(query_vector))
-        .limit(3)
+        .limit(5)
         .all()
     )
 
@@ -208,9 +208,13 @@ def ask_document(
             citations=[],
         )
 
-    # top is already limited to 3, no need to slice again
 
-    answer = "\n\n---\n\n".join((c.text or "")[:700] for c in top)  
+    try:
+        answer = generate_answer(question, [c.text for c in top])
+    except Exception as e:
+        print("Claude API failed:", repr(e))
+        # Fallback: return raw chunks so the endpoint still works
+        answer = "\n\n---\n\n".join((c.text or "")[:700] for c in top) 
 
     citations = [
         {

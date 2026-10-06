@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "dev-change-me"
     JWT_ALG: str = "HS256"
     ACCESS_TOKEN_MINUTES: int = 15
+    ANTHROPIC_API_KEY: str = ""
+    CLAUDE_MODEL: str = "claude-haiku-4-5-20251001"
 
     class Config:
         env_file = ".env"
