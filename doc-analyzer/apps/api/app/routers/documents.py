@@ -13,7 +13,8 @@ from app.core.database import SessionLocal, get_db
 from app.core.security_deps import get_current_user
 from app.models import Chunk, Document, User
 from app.schemas.documents import AskIn, AskOut, DocumentOut
-
+from app.services.chunking import chunk_text
+from app.services.embeddings import embed_query, embed_texts
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
@@ -37,30 +38,7 @@ def extract_text_from_pdf_bytes(content: bytes) -> str:
     return "\n\n".join(parts).strip()
 
 
-def chunk_text(text: str, chunk_size: int = 900, overlap: int = 150) -> List[str]:
-    """
-    Simple sliding window chunker (character-based MVP).
-    """
-    if not text:
-        return []
 
-    chunks: List[str] = []
-    i = 0
-    n = len(text)
-
-    while i < n:
-        end = min(i + chunk_size, n)
-        chunk = text[i:end].strip()
-
-        if chunk:
-            chunks.append(chunk)
-
-        if end == n:
-            break
-
-        i = max(0, end - overlap)
-
-    return chunks
 
 
 # --------------------------------------------------
@@ -83,18 +61,26 @@ def process_document_bytes(doc_id: int, content: bytes) -> None:
         db.commit()
 
         text = extract_text_from_pdf_bytes(content)
-        chunks = chunk_text(text)
+        chunks = chunk_text(text, max_chars=800, overlap=150)
+
+        if not chunks:
+            # Scanned/image-only PDF: no selectable text
+            doc.status = "failed"
+            db.commit()
+            return
+
+        vectors = embed_texts(chunks)
 
         # Clear previous chunks (safe for re-upload)
         db.query(Chunk).filter(Chunk.document_id == doc_id).delete()
-        db.commit()
 
-        for idx, chunk in enumerate(chunks):
+        for idx, (chunk, vector) in enumerate(zip(chunks, vectors)):
             db.add(
                 Chunk(
                     document_id=doc_id,
                     idx=idx,
-                    text=chunk,   # ✅ Correct column name
+                    text=chunk,
+                    embedding=vector,
                 )
             )
 
@@ -206,28 +192,23 @@ def ask_document(
     if not question:
         raise HTTPException(status_code=422, detail="Question is required.")
 
-    q = question.lower()
+    query_vector = embed_query(question)
 
-    chunks = (
+    top = (
         db.query(Chunk)
-        .filter(Chunk.document_id == doc.id)
-        .order_by(Chunk.idx.asc())
+        .filter(Chunk.document_id == doc.id, Chunk.embedding.isnot(None))
+        .order_by(Chunk.embedding.cosine_distance(query_vector))
+        .limit(3)
         .all()
     )
 
-    matches: List[Chunk] = []
-
-    for c in chunks:
-        if q in (c.text or "").lower():   
-            matches.append(c)
-
-    if not matches:
+    if not top:
         return AskOut(
-            answer="I couldn’t find anything relevant in this document.",
+            answer="I couldn't find anything relevant in this document.",
             citations=[],
         )
 
-    top = matches[:3]
+    # top is already limited to 3, no need to slice again
 
     answer = "\n\n---\n\n".join((c.text or "")[:700] for c in top)  
 
