@@ -220,7 +220,7 @@ def ask_document(
         {
             "chunk_id": c.id,
             "idx": c.idx,
-            "snippet": (c.text or "")[:350], 
+            "snippet": c.text or "",
         }
         for c in top
     ]

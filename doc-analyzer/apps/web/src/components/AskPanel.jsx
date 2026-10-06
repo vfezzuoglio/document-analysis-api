@@ -5,7 +5,32 @@ function nowTime() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function Bubble({ role, text, meta }) {
+function AnswerText({ text, citationCount, onCite }) {
+  const parts = text.split(/(\[\d+\])/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const m = part.match(/^\[(\d+)\]$/);
+        const n = m ? Number(m[1]) : null;
+        if (n && n >= 1 && n <= citationCount) {
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onCite(n)}
+              className="mx-0.5 inline-flex items-center rounded-md border px-1.5 text-[11px] font-semibold align-super hover:bg-black/5"
+            >
+              {n}
+            </button>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+function Bubble({ role, text, meta, citationCount = 0, onCite }) {
   const isUser = role === "user";
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -14,29 +39,35 @@ function Bubble({ role, text, meta }) {
           isUser ? "bg-black/5" : ""
         }`}
       >
-        <div>{text}</div>
+        <div>
+          {isUser ? text : <AnswerText text={text} citationCount={citationCount} onCite={onCite} />}
+        </div>
         {meta ? <div className="mt-2 text-[11px] opacity-60">{meta}</div> : null}
       </div>
     </div>
   );
 }
 
-function CitationCard({ c }) {
+function CitationCard({ c, n, id, active }) {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
+
   return (
-    <div className="rounded-xl border p-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full text-left"
-      >
+    <div
+      id={id}
+      className={`rounded-xl border p-3 transition-colors ${active ? "border-black bg-black/5" : ""}`}
+    >
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full text-left">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-semibold">
-            Chunk #{c.idx} <span className="text-xs opacity-60">(id {c.chunk_id})</span>
+            [{n}] <span className="font-normal opacity-70">Chunk #{c.idx}</span>
           </div>
           <div className="text-xs opacity-60">{open ? "Hide" : "Show"}</div>
         </div>
-        <div className="mt-1 text-sm opacity-80 line-clamp-2">{c.snippet}</div>
+        {!open ? <div className="mt-1 text-sm opacity-80 line-clamp-2">{c.snippet}</div> : null}
       </button>
 
       {open ? <div className="mt-3 text-sm whitespace-pre-wrap">{c.snippet}</div> : null}
@@ -50,6 +81,18 @@ export default function AskPanel({ docId, docs }) {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [activeCite, setActiveCite] = useState(null); // { msg, n }
+
+  useEffect(() => {
+    setActiveCite(null);
+  }, [docId]);
+
+  function cite(msgIndex, n) {
+    setActiveCite({ msg: msgIndex, n });
+    document
+      .getElementById(`cite-${msgIndex}-${n}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 
   const doc = useMemo(() => {
     if (!docId) return null;
@@ -171,13 +214,25 @@ export default function AskPanel({ docId, docs }) {
             <div className="space-y-3">
               {thread.map((m, i) => (
                 <div key={i} className="space-y-2">
-                  <Bubble role={m.role} text={m.text} meta={m.ts} />
+                  <Bubble
+                    role={m.role}
+                    text={m.text}
+                    meta={m.ts}
+                    citationCount={m.citations?.length || 0}
+                    onCite={(n) => cite(i, n)}
+                  />
                   {m.role === "assistant" && m.citations?.length ? (
                     <div className="ml-1 space-y-2">
-                      <div className="text-xs font-semibold opacity-70">Citations</div>
+                      <div className="text-xs font-semibold opacity-70">Sources</div>
                       <div className="space-y-2">
-                        {m.citations.map((c) => (
-                          <CitationCard key={`${c.chunk_id}-${c.idx}`} c={c} />
+                        {m.citations.map((c, ci) => (
+                          <CitationCard
+                            key={`${c.chunk_id}-${c.idx}`}
+                            c={c}
+                            n={ci + 1}
+                            id={`cite-${i}-${ci + 1}`}
+                            active={activeCite?.msg === i && activeCite?.n === ci + 1}
+                          />
                         ))}
                       </div>
                     </div>
