@@ -2,7 +2,6 @@
 
 Upload a PDF, ask questions in plain English, and get answers grounded in the document — with clickable citations back to the exact passages used.
 
-![Demo](docs/demo.gif)
 
 ## Features
 
